@@ -22,7 +22,6 @@ export class RecordTypes extends BrowserforcePlugin {
     const recordTypes = await queryRecordTypes(conn);
     for (const deletion of definition.deletions) {
       const recordType = getRecordType(deletion.fullName, recordTypeFileProperties, recordTypes);
-      console.log('recordType' + JSON.stringify(recordType, null, 2));
       if (recordType) {
 
         if (deletion.replacement) {
@@ -39,7 +38,6 @@ export class RecordTypes extends BrowserforcePlugin {
         response.deletions.push(deletion);
       }
     }
-    console.log('This is the response: ' + JSON.stringify(response.deletions, null, 2));
     return response;
   }
 
