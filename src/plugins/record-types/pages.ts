@@ -1,31 +1,63 @@
-import { Page } from 'puppeteer';
+import { ElementHandle, Page } from 'puppeteer';
+import { throwPageErrors } from '../../browserforce';
+
 
 export class RecordTypePage {
-  private page;
+  private page: Page;
 
   constructor(page: Page) {
     this.page = page;
   }
 
-  public async clickDeleteAction(recordTypeId: string): Promise<RecordTypeDeletePage> {
-    const xpath = `//a[contains(@href, "setup/ui/recordtypedelete.jsp?id=${recordTypeId.slice(0, 15)}")]`;
+  private async clickAction(recordTypeId: string, action: 'delete' | 'edit'): Promise<RecordTypeDeletePage | RecordTypeEditPage> {
+    const baseUrl = 'setup/ui/recordtype';
+    const xpath = `//a[contains(@href, "${baseUrl}${action}.jsp?id=${recordTypeId.slice(0, 15)}")]`;
     await this.page.waitForXPath(xpath);
-    const deleteLink = (await this.page.$x(xpath))[0];
-    await Promise.all([this.page.waitForNavigation(), this.page.evaluate((e) => e.click(), deleteLink)]);
-    return new RecordTypeDeletePage(this.page);
+    const link = await this.page.$x(xpath);
+
+    if (!link) {
+      throw new Error(`${action.charAt(0).toUpperCase() + action.slice(1)} link not found`);
+    }
+    await Promise.all([
+      this.page.waitForNavigation({ waitUntil: 'networkidle0' }),
+      (link[0] as ElementHandle<Element>).click()
+    ]);
+    return action === 'delete' ? new RecordTypeDeletePage(this.page) : new RecordTypeEditPage(this.page);
+  }
+
+  async clickDeleteAction(recordTypeId: string): Promise<RecordTypeDeletePage> {
+    return this.clickAction(recordTypeId, 'delete') as Promise<RecordTypeDeletePage>;
+  }
+  
+  async clickEditAction(recordTypeId: string): Promise<RecordTypeEditPage> {
+    return this.clickAction(recordTypeId, 'edit') as Promise<RecordTypeEditPage>;
   }
 }
 
-export class RecordTypeDeletePage {
-  protected page;
-  protected saveButton = 'input[name="save"]';
 
-  constructor(page: Page) {
+export abstract class RecordTypeActionPage {
+  protected page: Page;
+  protected saveButton: string;
+
+  constructor(page: Page, saveButton: string) {
     this.page = page;
+    this.saveButton = saveButton;
   }
 
-  async replace(newRecordTypeId?: string): Promise<void> {
-    await this.throwOnMissingSaveButton();
+  protected async save(): Promise<void> {
+    await this.page.waitForSelector(this.saveButton);
+    await Promise.all([this.page.waitForNavigation(), this.page.click(this.saveButton)]);
+    await throwPageErrors(this.page);
+  }
+}
+
+export class RecordTypeDeletePage extends RecordTypeActionPage {
+  constructor(page: Page) {
+    super(page, 'input[name="save"]');
+  }
+
+  async deleteAndReplace(newRecordTypeId?: string): Promise<void> {
+    await this.checkAndThrowOnError();
     const NEW_VALUE_SELECTOR = 'select#p2';
     if (newRecordTypeId) {
       await this.page.waitForSelector(NEW_VALUE_SELECTOR);
@@ -33,35 +65,33 @@ export class RecordTypeDeletePage {
     }
     await this.save();
   }
-
-  async save(): Promise<void> {
-    await this.page.waitForSelector(this.saveButton);
-    await Promise.all([this.page.waitForNavigation(), this.page.click(this.saveButton)]);
-    await this.throwPageErrors();
-  }
-
-  async throwOnMissingSaveButton(): Promise<void> {
+  
+  async checkAndThrowOnError(): Promise<void> {
     const saveButton = await this.page.$(this.saveButton);
     if (!saveButton) {
-      const bodyHandle = await this.page.$('div.pbBody');
-      if (bodyHandle) {
-        const errorMsg = await this.page.evaluate((div: HTMLDivElement) => div.textContent, bodyHandle);
-        await bodyHandle.dispose();
-        if (errorMsg?.trim()) {
-          throw new Error(errorMsg.trim());
+        const ErrorMsg = await this.page.evaluate(() => {
+            const description = document.querySelector('div.bDescription')?.textContent?.trim() || '';
+            const body = document.querySelector('div.pbSubsection')?.textContent?.trim() || '';
+            return [description, body].filter(text => text).join('\n');
+        });
+
+        if (ErrorMsg) {
+            throw new Error(ErrorMsg);
         }
-      }
     }
   }
 
-  async throwPageErrors(): Promise<void> {
-    const errorHandle = await this.page.$('div#validationError div.messageText');
-    if (errorHandle) {
-      const errorMsg = await this.page.evaluate((div: HTMLDivElement) => div.innerText, errorHandle);
-      await errorHandle.dispose();
-      if (errorMsg?.trim()) {
-        throw new Error(errorMsg.trim());
-      }
-    }
+}
+
+
+export class RecordTypeEditPage extends RecordTypeActionPage {
+  constructor(page: Page) {
+    super(page, '#bottomButtonRow > input:nth-child(1)');
   }
+
+  async deactivateRecordType(): Promise<void> {
+    await this.page.$eval('input[name="p5"]', check => check.checked = false);
+    await this.save();
+  }
+  //to do add errorHandling for can't deactivate record type if it is a default.
 }
