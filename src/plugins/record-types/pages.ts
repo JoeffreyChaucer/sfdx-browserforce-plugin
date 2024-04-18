@@ -76,7 +76,9 @@ export class RecordTypeDeletePage extends RecordTypeActionPage {
         });
 
         if (ErrorMsg) {
-            throw new Error(ErrorMsg);
+          const errMsg = new Error(ErrorMsg);
+          errMsg.stack = ''; 
+          throw errMsg;
         }
     }
   }
@@ -92,6 +94,23 @@ export class RecordTypeEditPage extends RecordTypeActionPage {
   async deactivateRecordType(): Promise<void> {
     await this.page.$eval('input[name="p5"]', check => check.checked = false);
     await this.save();
+    //check if record type deactived and save
+    try {
+      await this.page.waitForNavigation({ timeout: 5000, waitUntil: 'networkidle0' });
+     } catch (error) {
+      
+        const errorMsg = await this.page.evaluate(() => {
+          const description = document.querySelector('#ep > div.pbBody > div:nth-child(3) > table > tbody > tr:nth-child(7) > td.last.data2Col > span')?.textContent?.trim() || '';
+          return description;
+        });
+
+        
+        if (errorMsg) {
+          const errMsg = new Error(errorMsg);
+          errMsg.stack = ''; 
+          throw errMsg;
+        }
+        
+    }
   }
-  //to do add errorHandling for can't deactivate record type if it is a default.
 }
