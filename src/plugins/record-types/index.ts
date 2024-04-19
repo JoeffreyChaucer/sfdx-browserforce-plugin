@@ -56,8 +56,13 @@ export class RecordTypes extends BrowserforcePlugin {
       const recordTypePage = new RecordTypePage(page);
       
       if (recordType.IsActive) {
-        const editPage = await recordTypePage.clickEditAction(recordType.Id);
-        editPage.deactivateRecordType();
+        try {
+          const editPage = await recordTypePage.clickEditAction(recordType.Id);
+          await editPage.deactivateRecordType();
+        } catch (error) {
+            console.error(`Failed to deactivate record type with ID ${recordType.Id}:`, error);
+            continue; 
+        }
       }
       
       const deletePage = await recordTypePage.clickDeleteAction(recordType.Id);

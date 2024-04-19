@@ -24,6 +24,13 @@ describe(RecordTypes.name, function () {
       }
     ]
   };
+  const configDeleteActiveDefault = {
+    deletions: [
+      {
+        fullName: 'Vehicle__c.Scooter'
+      }
+    ]
+  };
   const configDeleteAndReplace = {
     deletions: [
       {
@@ -51,10 +58,13 @@ describe(RecordTypes.name, function () {
     const res = await plugin.run(configDelete);
     assert.deepStrictEqual(res, { message: 'no action necessary' });
   });
-  it('should fail deleting an active record type', async () => {
+  it('should deactivate a record type that is not a default and then delete it', async () => {
+    await plugin.run(configDeleteActive);
+});
+  it('should fail deleting an active default record type', async () => {
     let err;
     try {
-      await plugin.run(configDeleteActive);
+      await plugin.run(configDeleteActiveDefault);
     } catch (e) {
       err = e;
     }

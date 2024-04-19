@@ -76,7 +76,9 @@ export class RecordTypeDeletePage extends RecordTypeActionPage {
         });
 
         if (ErrorMsg) {
-            throw new Error(ErrorMsg);
+          const errMsg = new Error(ErrorMsg);
+          errMsg.stack = ''; 
+          throw errMsg;
         }
     }
   }
@@ -92,6 +94,31 @@ export class RecordTypeEditPage extends RecordTypeActionPage {
   async deactivateRecordType(): Promise<void> {
     await this.page.$eval('input[name="p5"]', check => check.checked = false);
     await this.save();
+    //check if record type deactived and save
+    try {
+      await this.page.waitForNavigation({ timeout: 5000, waitUntil: 'networkidle0' });
+     } catch (error) {
+      
+        const errorMsg = await this.page.evaluate(() => {
+          const description = document.querySelector('#ep > div.pbBody > div:nth-child(3) > table > tbody > tr:nth-child(7) > td.last.data2Col > span')?.textContent?.trim() || '';
+          return description;
+        });
+         // Extracting text from the table
+         const tableText = await this.page.evaluate(() => {
+          const rows = Array.from(document.querySelectorAll('#ep > div.pbBody > div:nth-child(5) > table > tbody > tr:nth-child(1)')); // Selects all rows in all tables
+          return rows.map(row => {
+              const cells = Array.from(row.querySelectorAll('th, td'));
+              return cells.map(cell => cell.textContent ? cell.textContent : '');
+          });
+      });
+
+        
+        if (errorMsg) {
+          const errMsg = new Error(errorMsg + tableText);
+          errMsg.stack = ''; 
+          throw errMsg;
+        }
+        
+    }
   }
-  //to do add errorHandling for can't deactivate record type if it is a default.
 }
