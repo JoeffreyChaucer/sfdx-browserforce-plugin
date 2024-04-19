@@ -103,10 +103,18 @@ export class RecordTypeEditPage extends RecordTypeActionPage {
           const description = document.querySelector('#ep > div.pbBody > div:nth-child(3) > table > tbody > tr:nth-child(7) > td.last.data2Col > span')?.textContent?.trim() || '';
           return description;
         });
+         // Extracting text from the table
+         const tableText = await this.page.evaluate(() => {
+          const rows = Array.from(document.querySelectorAll('#ep > div.pbBody > div:nth-child(5) > table > tbody > tr:nth-child(1)')); // Selects all rows in all tables
+          return rows.map(row => {
+              const cells = Array.from(row.querySelectorAll('th, td'));
+              return cells.map(cell => cell.textContent ? cell.textContent : '');
+          });
+      });
 
         
         if (errorMsg) {
-          const errMsg = new Error(errorMsg);
+          const errMsg = new Error(errorMsg + tableText);
           errMsg.stack = ''; 
           throw errMsg;
         }
