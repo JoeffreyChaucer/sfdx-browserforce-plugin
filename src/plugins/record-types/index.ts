@@ -9,6 +9,7 @@ type Config = {
 type RecordTypeConfig = {
   fullName: string;
   replacement?: string;
+  toBeDeleted?: boolean;
 };
 
 export class RecordTypes extends BrowserforcePlugin {
@@ -22,9 +23,7 @@ export class RecordTypes extends BrowserforcePlugin {
     for (const deletion of definition.deletions) {
       const recordType = getRecordType(deletion.fullName, recordTypeFileProperties, recordTypes);
       if (recordType) {
-        if (recordType.IsActive) {
-          throw new Error(`Cannot delete active RecordType: ${deletion.fullName}`);
-        }
+
         if (deletion.replacement) {
           const replacementRecordType = getRecordType(deletion.replacement, recordTypeFileProperties, recordTypes);
           if (!replacementRecordType) {
@@ -32,7 +31,8 @@ export class RecordTypes extends BrowserforcePlugin {
           }
         }
         response.deletions.push({
-          ...deletion
+          ...deletion,
+          toBeDeleted: true
         });
       } else {
         response.deletions.push(deletion);
@@ -46,19 +46,32 @@ export class RecordTypes extends BrowserforcePlugin {
     const recordTypeFileProperties = await listRecordTypes(conn);
     const recordTypes = await queryRecordTypes(conn);
 
+
     for (const deletion of config.deletions) {
       const recordType = getRecordType(deletion.fullName, recordTypeFileProperties, recordTypes);
-      const page = await this.browserforce.openPage(
-        `ui/setup/rectype/RecordTypes?type=${recordType.EntityDefinitionId}`
-      );
+      let pageURL = `ui/setup/rectype/RecordTypes?type=${recordType.EntityDefinitionId}`;
+      
+      const page = await this.browserforce.openPage(pageURL);
+            
       const recordTypePage = new RecordTypePage(page);
+      
+      if (recordType.IsActive) {
+        try {
+          const editPage = await recordTypePage.clickEditAction(recordType.Id);
+          await editPage.deactivateRecordType();
+        } catch (error) {
+            console.error(`Failed to deactivate record type with ID ${recordType.Id}:`, error);
+            continue; 
+        }
+      }
+      
       const deletePage = await recordTypePage.clickDeleteAction(recordType.Id);
       let newRecordTypeId;
       if (deletion.replacement) {
         const replacementRecordType = getRecordType(deletion.replacement, recordTypeFileProperties, recordTypes);
         newRecordTypeId = replacementRecordType.Id;
       }
-      await deletePage.replace(newRecordTypeId);
+      await deletePage.deleteAndReplace(newRecordTypeId);
       await page.close();
     }
   }
